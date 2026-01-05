@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  jira-whatsapp-bot:
+    build: . 
+    container_name: bot_whatsapp
+    restart: always
+    ports:
+      - "5001:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./session.db:/app/session.db
