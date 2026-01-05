@@ -13,9 +13,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuración
+DATA_DIR = os.getenv('DATA_DIR', '.')
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '')
 WHATSAPP_GROUP_JID = os.getenv('WHATSAPP_GROUP_JID', '')
 PORT = int(os.getenv('PORT', 5000))
+
+# Asegurar que el directorio de datos existe
+if DATA_DIR != '.' and not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+# Rutas de archivos persistentes
+JID_FILE = os.path.join(DATA_DIR, "active_group.jid")
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -143,14 +151,14 @@ def jira_webhook():
             target_jid = None
             
             try:
-                if os.path.exists("active_group.jid"):
-                    with open("active_group.jid", "r") as f:
+                if os.path.exists(JID_FILE):
+                    with open(JID_FILE, "r") as f:
                         file_jid = f.read().strip()
                         if file_jid:
                             target_jid = file_jid
                             logger.info(f"📍 Usando JID dinámico desde archivo: {target_jid}")
             except Exception as e:
-                logger.error(f"Error leyendo active_group.jid: {e}")
+                logger.error(f"Error leyendo {JID_FILE}: {e}")
             
             # Si no hay JID en archivo, usar variable de entorno
             if not target_jid:

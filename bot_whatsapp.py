@@ -9,10 +9,19 @@ import os
 
 logging.basicConfig(level=logging.INFO)
 
+# Configuración de rutas
+DATA_DIR = os.getenv('DATA_DIR', '.')
+JID_FILE = os.path.join(DATA_DIR, "active_group.jid")
+
+# Asegurar que el directorio de datos existe
+if DATA_DIR != '.' and not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
+
 class WhatsAppBot:
-    def __init__(self, session_file="session.db"):
+    def __init__(self, session_file=None):
         self.client = None
-        self.session_file = session_file
+        # Si no se especifica, usar ruta en DATA_DIR
+        self.session_file = session_file or os.path.join(DATA_DIR, "session.db")
         self.is_connected = False
         self.connection_event = threading.Event()
         
@@ -48,8 +57,8 @@ class WhatsAppBot:
                 try:
                     # Verificar si había un grupo anterior
                     old_jid = None
-                    if os.path.exists("active_group.jid"):
-                        with open("active_group.jid", "r") as f:
+                    if os.path.exists(JID_FILE):
+                        with open(JID_FILE, "r") as f:
                             old_jid = f.read().strip()
                     
                     # Si había un grupo anterior y es diferente al actual, avisar
@@ -61,7 +70,7 @@ class WhatsAppBot:
                         )
 
                     # Guardar nuevo JID
-                    with open("active_group.jid", "w") as f:
+                    with open(JID_FILE, "w") as f:
                         f.write(jid_str)
                     print(f"✅ JID actualizado a: {jid_str}")
                     
