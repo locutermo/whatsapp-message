@@ -1,7 +1,6 @@
 from neonize.client import NewClient
 from neonize.events import ConnectedEv, JoinedGroupEv, MessageEv
 from neonize.proto.Neonize_pb2 import JID
-from neonize.utils import build_jid
 import logging
 import threading
 import time

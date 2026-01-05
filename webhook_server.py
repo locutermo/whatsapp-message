@@ -117,16 +117,6 @@ def jira_webhook():
     Endpoint para recibir webhooks de Jira
     """
     try:
-        # Log de headers para debug
-        # logger.info(f"📨 Headers recibidos: {dict(request.headers)}")
-
-        # Verificar secret si está configurado
-        # if WEBHOOK_SECRET:
-        #     provided_secret = request.headers.get('X-Webhook-Secret', '')
-        #     if provided_secret != WEBHOOK_SECRET:
-        #         logger.warning("⚠️ Intento de acceso con secret inválido")
-        #         return jsonify({'error': 'Unauthorized'}), 401
-        
         # Obtener datos del webhook
         webhook_data = request.json
         
@@ -216,8 +206,8 @@ def test_send():
         
         if not jid:
              try:
-                if os.path.exists("active_group.jid"):
-                    with open("active_group.jid", "r") as f:
+                if os.path.exists(JID_FILE):
+                    with open(JID_FILE, "r") as f:
                         jid = f.read().strip()
              except:
                  pass
