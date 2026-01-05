@@ -1,0 +1,5 @@
+MAIN=webhook_server.py
+MEMORY=256
+VERSION=recommended
+DISPLAY_NAME=JiraWhatsAppBot
+DESCRIPTION=Bot para enviar notificaciones de Jira a WhatsApp
