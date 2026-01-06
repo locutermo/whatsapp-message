@@ -1,21 +1,21 @@
 # 🤖 Bot de WhatsApp + Integración con Jira
 
-Bot automatizado de WhatsApp que recibe notificaciones de Jira Service Desk y las envía a grupos de WhatsApp.
+Bot automatizado de WhatsApp que recibe notificaciones de Jira Service Desk y las envía a grupos de WhatsApp. Optimizada para despliegue en la nube (Zeabur/Docker).
 
 ## 📋 Características
 
-- ✅ Conexión automática a WhatsApp mediante QR
-- ✅ Detección de cuando es añadido a grupos
-- ✅ Servidor webhook para recibir notificaciones de Jira
-- ✅ Envío automático de mensajes cuando se crean tickets
-- ✅ Formato profesional de mensajes con información del ticket
+- ✅ **Pairing Code**: Vinculación sin necesidad de escanear QR (ideal para servidores remotos).
+- ✅ **Dynamic Grouping**: Configuración de grupo de destino mediante el comando `/group`.
+- ✅ **Session Management**: Mecanismo de reset forzado para solucionar bloqueos de inicio de sesión.
+- ✅ **Dockerized**: Listo para desplegar en cualquier plataforma con soporte Docker.
+- ✅ **Formato profesional**: Mensajes claros con información relevante del ticket de Jira.
 
 ## 🚀 Instalación
 
 ### 1. Instalar dependencias
 
 ```bash
-pip3.10 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Configurar variables de entorno
@@ -26,167 +26,66 @@ Copia el archivo `.env.example` a `.env` y configura tus credenciales:
 cp .env.example .env
 ```
 
-Edita el archivo `.env`:
+Variables principales:
+- `WHATSAPP_PHONE`: Tu número de teléfono (con código de país, ej: `519XXXXXXXX`).
+- `WHATSAPP_GROUP_JID`: (Opcional) JID inicial del grupo.
+- `WEBHOOK_SECRET`: Secreto para validar peticiones de Jira.
+- `WHATSAPP_RESET_SESSION`: Establecer a `true` si el login se queda pegado.
 
-```env
-# Configuración de Jira
-JIRA_URL=https://integratelperu.atlassian.net
-JIRA_EMAIL=tu-email@ejemplo.com
-JIRA_API_TOKEN=tu-api-token-aqui
+## 🎯 Configuración de WhatsApp (Pairing Code)
 
-# Configuración de WhatsApp
-WHATSAPP_GROUP_JID=123456789@g.us
+En lugar de QR, este bot usa un **Código de Emparejamiento** de 8 dígitos:
 
-# Configuración del servidor webhook
-WEBHOOK_SECRET=tu-secreto-seguro-aqui
-PORT=5000
-```
+1. Inicia el bot (`python main.py`).
+2. En los logs/consola verás un mensaje: `📲 Solicitando Pairing Code para el número: ...`.
+3. Un código de 8 caracteres aparecerá (ej: `ABC1-DEF2`).
+4. En tu celular (WhatsApp → Dispositivos vinculados → Vincular dispositivo → **Vincular con el número de teléfono**), ingresa el código.
 
-### 3. Obtener el JID del grupo de WhatsApp
+## 🔧 Uso y Comandos
 
-Primero, ejecuta el bot en modo standalone para obtener el JID del grupo:
-
+### Punto de entrada (Producción)
 ```bash
-python3.10 bot_whatsapp.py
+python main.py
 ```
 
-1. Escanea el código QR con tu WhatsApp
-2. Añade el bot a un grupo
-3. El bot te mostrará el JID del grupo en la consola
-4. Copia ese JID y pégalo en `.env` como `WHATSAPP_GROUP_JID`
+### Configurar el grupo de destino
+Una vez que el bot esté conectado:
+1. Añade el bot a un grupo de WhatsApp.
+2. Dentro del grupo, escribe el comando: **/group**.
+3. El bot confirmará que ese chat recibirá las notificaciones de Jira.
 
-### 4. Crear API Token de Jira
+## 📦 Despliegue en Zeabur
 
-1. Ve a: https://id.atlassian.com/manage-profile/security/api-tokens
-2. Clic en "Create API token"
-3. Dale un nombre descriptivo (ej: "WhatsApp Bot")
-4. Copia el token y pégalo en `.env` como `JIRA_API_TOKEN`
-
-## 🎯 Uso
-
-### Modo 1: Solo Bot de WhatsApp
-
-```bash
-python3.10 bot_whatsapp.py
-```
-
-### Modo 2: Servidor Webhook + Bot (Recomendado)
-
-```bash
-python3.10 webhook_server.py
-```
-
-El servidor estará disponible en `http://localhost:5000`
-
-### Endpoints disponibles:
-
-- **GET** `/health` - Verificar estado del servidor y bot
-- **POST** `/webhook/jira` - Recibir webhooks de Jira
-- **POST** `/test/send` - Enviar mensaje de prueba
-
-## 🔧 Configurar Webhook en Jira
-
-1. Ve a **Jira Settings** → **System** → **Webhooks**
-2. Clic en **Create a Webhook**
-3. Configura:
-   - **Name**: WhatsApp Notifications
-   - **Status**: Enabled
-   - **URL**: `https://tu-servidor.com/webhook/jira`
-   - **Events**: Issue → created
-   - **JQL**: `project = GHD` (para filtrar solo el proyecto GHD)
-
-4. En los headers, añade (opcional pero recomendado):
-   ```
-   X-Webhook-Secret: tu-secreto-seguro-aqui
-   ```
-
-## 🧪 Probar la integración
-
-### 1. Verificar que el servidor está corriendo:
-
-```bash
-curl http://localhost:5000/health
-```
-
-### 2. Enviar mensaje de prueba:
-
-```bash
-curl -X POST http://localhost:5000/test/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jid": "123456789@g.us",
-    "message": "🧪 Prueba de integración Jira-WhatsApp"
-  }'
-```
-
-### 3. Simular webhook de Jira:
-
-```bash
-curl -X POST http://localhost:5000/webhook/jira \
-  -H "Content-Type: application/json" \
-  -H "X-Webhook-Secret: tu-secreto-seguro-aqui" \
-  -d '{
-    "webhookEvent": "jira:issue_created",
-    "issue": {
-      "key": "GHD-123",
-      "fields": {
-        "summary": "Ticket de prueba",
-        "description": "Esta es una descripción de prueba",
-        "reporter": {"displayName": "Juan Pérez"},
-        "priority": {"name": "High"},
-        "issuetype": {"name": "Incident"}
-      }
-    }
-  }'
-```
-
-## 📦 Despliegue en Square Cloud
-
-El archivo `square.cloud` ya está configurado. Solo necesitas:
-
-1. Asegurarte de que el archivo `.env` esté configurado
-2. Cambiar `MAIN=bot_whatsapp.py` a `MAIN=webhook_server.py` en `square.cloud`
-3. Subir el proyecto a Square Cloud
-
-## 🔒 Seguridad
-
-- ⚠️ **Nunca** compartas tu archivo `.env`
-- ⚠️ **Nunca** subas `session.db` a repositorios públicos
-- ✅ Usa siempre `WEBHOOK_SECRET` en producción
-- ✅ Usa HTTPS en producción (no HTTP)
+Este proyecto está optimizado para Zeabur:
+1. El `Dockerfile` expone el puerto `5000`.
+2. Se usa `main.py` para manejar dinámicamente el puerto asignado por la plataforma.
+3. Asegúrate de configurar las variables de entorno en el panel de Zeabur.
+4. Usa los **Runtime Logs** para obtener el Pairing Code en el primer inicio.
 
 ## 📁 Estructura del Proyecto
 
 ```
 whatsapp-message/
-├── bot_whatsapp.py      # Cliente de WhatsApp (clase reutilizable)
-├── webhook_server.py    # Servidor Flask para webhooks
-├── requirements.txt     # Dependencias Python
-├── .env.example        # Plantilla de variables de entorno
-├── .env                # Variables de entorno (NO SUBIR A GIT)
-├── session.db          # Sesión de WhatsApp (NO SUBIR A GIT)
-├── square.cloud        # Configuración para Square Cloud
-└── README.md           # Este archivo
+├── main.py              # Punto de entrada principal (Bootstrap)
+├── bot_whatsapp.py      # Lógica del cliente WhatsApp (Neonize)
+├── webhook_server.py    # Servidor Flask para Webhooks de Jira
+├── Dockerfile           # Configuración para despliegue en contenedores
+├── Procfile             # Configuración para despliegue en PaaS
+├── requirements.txt     # Dependencias del proyecto
+└── active_group.jid     # Archivo persistente con el ID del grupo actual
 ```
 
 ## 🐛 Troubleshooting
 
-### El bot no se conecta a WhatsApp
-- Verifica que `session.db` tenga permisos de lectura/escritura
-- Intenta eliminar `session.db` y volver a escanear el QR
+### El bot se queda en "Iniciando sesión..." infinitamente
+Esto ocurre por un archivo de sesión corrupto ("Zombie file").
+1. Establece `WHATSAPP_RESET_SESSION=true` en tus variables de entorno.
+2. Reinicia el servicio. El archivo de sesión se borrará automáticamente.
+3. Vincula de nuevo con el nuevo código generado.
+4. Cambia `WHATSAPP_RESET_SESSION` a `false`.
 
-### No llegan las notificaciones de Jira
-- Verifica que el webhook esté configurado correctamente en Jira
-- Revisa los logs del servidor con `tail -f logs.txt`
-- Verifica que `WHATSAPP_GROUP_JID` esté correctamente configurado
+### Error "no sender key for..."
+Es normal al inicio de una sesión o al entrar a un grupo nuevo. **Envía un mensaje nuevo al grupo desde otro teléfono** para forzar el intercambio de llaves.
 
-### Error "libmagic not found"
-```bash
-brew install libmagic
-```
-
-## 📞 Soporte
-
-Para más información sobre la librería neonize:
-- GitHub: https://github.com/krypton-byte/neonize
-- PyPI: https://pypi.org/project/neonize/
+---
+Basado en la librería [neonize](https://github.com/krypton-byte/neonize).
