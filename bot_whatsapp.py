@@ -95,7 +95,16 @@ class WhatsAppBot:
         """Inicia el cliente de WhatsApp"""
         logging.info(f"💾 Usando archivo de sesión: {self.session_file}")
 
-        if (
+        # Reset de sesión forzado o limpieza de archivo vacío
+        should_reset = os.getenv("WHATSAPP_RESET_SESSION", "false").lower() == "true"
+
+        if should_reset:
+            logging.info(
+                "🧹 Reset de sesión solicitado (WHATSAPP_RESET_SESSION=true), eliminando sesión..."
+            )
+            if os.path.exists(self.session_file):
+                os.remove(self.session_file)
+        elif (
             os.path.exists(self.session_file)
             and os.path.getsize(self.session_file) == 0
         ):
