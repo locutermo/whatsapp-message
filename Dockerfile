@@ -1,9 +1,10 @@
 # Usar Python 3.10 versión ligera
 FROM python:3.10-slim
 
+# Evitar que los logs de Python se queden en el buffer (importante para ver logs en Zeabur)
+ENV PYTHONUNBUFFERED=1
+
 # Instalar dependencias del sistema necesarias
-# libmagic1 es necesario para detectar tipos de archivos (mencionado en tu README)
-# ffmpeg suele ser útil para bots de whatsapp (audio/video)
 RUN apt-get update && apt-get install -y \
     libmagic1 \
     ffmpeg \
@@ -20,8 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del código
 COPY . .
 
-# Exponer el puerto
+# Exponer el puerto predeterminado
 EXPOSE 5000
 
-# Comando para ejecutar el servidor (Modo Webhook)
-CMD ["python", "webhook_server.py"]
+# Comando para ejecutar el servidor
+# Usamos main.py que tiene mejor manejo de la variable PORT de Zeabur
+CMD ["python", "main.py"]
