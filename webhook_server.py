@@ -4,9 +4,6 @@ import os
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
-import qrcode
-import io
-import base64
 
 load_dotenv()
 
@@ -87,82 +84,6 @@ def health_check():
             "bot_connected": whatsapp_bot.is_connected,
             "timestamp": datetime.now().isoformat(),
         }
-    )
-
-
-@app.route("/qr", methods=["GET"])
-def get_qr():
-    """Endpoint para mostrar el código QR de WhatsApp con auto-update"""
-    if whatsapp_bot.is_connected:
-        return (
-            """
-        <html>
-            <head><title>Bot Conectado</title><style>body{font-family:sans-serif;text-align:center;padding-top:50px;}</style></head>
-            <body>
-                <h1>✅ Bot ya está conectado a WhatsApp</h1>
-                <p>El bot está listo para procesar notificaciones de Jira.</p>
-            </body>
-        </html>
-        """,
-            200,
-        )
-    print(f"whatsapp_bot.qr_data: {whatsapp_bot.qr_data}")
-    if not whatsapp_bot.qr_data:
-        logger.info("🔍 /qr acceded but whatsapp_bot.qr_data is None")
-        return (
-            """
-        <html>
-            <head>
-                <title>Generando QR...</title>
-                <meta http-equiv="refresh" content="5">
-                <style>body{font-family:sans-serif;text-align:center;padding-top:50px;}</style>
-            </head>
-            <body>
-                <h1>⏳ Generando código QR...</h1>
-                <p>Por favor espera un momento, la página se recargará automáticamente cada 5 segundos.</p>
-            </body>
-        </html>
-        """,
-            200,
-        )
-
-    # Generar imagen QR
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(whatsapp_bot.qr_data)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-
-    # Guardar en buffer de memoria y convertir a base64
-    img_io = io.BytesIO()
-    img.save(img_io, "PNG")
-    img_io.seek(0)
-    img_base64 = base64.b64encode(img_io.getvalue()).decode()
-
-    return (
-        f"""
-    <html>
-        <head>
-            <title>Vincular WhatsApp</title>
-            <meta http-equiv="refresh" content="15">
-            <style>
-                body {{ font-family: sans-serif; text-align: center; padding: 20px; background-color: #f0f2f5; }}
-                .container {{ background: white; padding: 30px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-                img {{ margin: 20px 0; }}
-                .status {{ color: #65676b; font-size: 0.9em; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>Escanea el código QR</h1>
-                <p>Abre WhatsApp en tu teléfono > Dispositivos vinculados > Vincular un dispositivo</p>
-                <img src="data:image/png;base64,{img_base64}" alt="QR WhatsApp" />
-                <p class="status">La página se actualiza automáticamente cada 15 segundos.</p>
-                <p class="status">Última actualización: {datetime.now().strftime('%H:%M:%S')}</p>
-            </div>
-        </body>
-    </html>
-    """,
-        200,
     )
 
 

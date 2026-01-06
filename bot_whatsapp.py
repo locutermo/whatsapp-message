@@ -1,9 +1,8 @@
 from neonize.client import NewClient
-from neonize.events import ConnectedEv, JoinedGroupEv, MessageEv, QREv
+from neonize.events import ConnectedEv, JoinedGroupEv, MessageEv
 from neonize.proto.Neonize_pb2 import JID
 import logging
 import threading
-import time
 import os
 
 logging.basicConfig(level=logging.INFO)
@@ -84,11 +83,9 @@ class WhatsAppBot:
         def on_group_join(client: NewClient, event: JoinedGroupEv):
             group_jid = event.GroupInfo.JID
 
-            # Formatear JID como string
             jid_str = f"{group_jid.User}@{group_jid.Server}"
             print(f"📢 Fui añadido al grupo: {jid_str}")
 
-            # Mensaje de bienvenida (sin autoguardado)
             self.send_message(
                 group_jid,
                 f"👋 ¡Hola! Soy el bot de Jira.\n\nPara recibir notificaciones aquí, envía el comando: */group*\n\nDe lo contrario, seguiré usando la configuración por defecto.",
@@ -96,19 +93,35 @@ class WhatsAppBot:
 
     def start(self):
         """Inicia el cliente de WhatsApp"""
+        logging.info(f"💾 Usando archivo de sesión: {self.session_file}")
+
+        if (
+            os.path.exists(self.session_file)
+            and os.path.getsize(self.session_file) == 0
+        ):
+            logging.info("🧹 Archivo de sesión vacío detectado, limpiando...")
+            os.remove(self.session_file)
+
         self.client = NewClient(self.session_file)
         self.setup_handlers()
 
-        # Iniciar en un thread separado para no bloquear
+        phone_number = os.getenv("WHATSAPP_PHONE")
+
         def run_client():
-            self.client.connect()
+            logging.info("⚡ Intentando conectar a WhatsApp...")
+            try:
+                if not self.client.is_logged_in and phone_number:
+                    logging.info(
+                        f"📲 Solicitando Pairing Code para el número: {phone_number}"
+                    )
+                    self.client.PairPhone(phone_number, True)
 
-        client_thread = threading.Thread(target=run_client, daemon=True)
-        client_thread.start()
+                self.client.connect()
+            except Exception as e:
+                logging.error(f"❌ Error crítico en la conexión: {e}")
 
-        # Esperar a que se conecte (máximo 30 segundos)
-        if not self.connection_event.wait(timeout=30):
-            print("⚠️ Advertencia: El bot no se conectó en 30 segundos")
+        self.client_thread = threading.Thread(target=run_client, daemon=True)
+        self.client_thread.start()
 
         return self.client
 
@@ -152,14 +165,6 @@ class WhatsAppBot:
             print(f"❌ Error al enviar mensaje: {e}")
             return False
 
-    def wait_forever(self):
-        """Mantiene el bot ejecutándose indefinidamente"""
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\n👋 Bot detenido por el usuario")
-
 
 # Instancia global del bot
 bot_instance = None
@@ -172,10 +177,3 @@ def get_bot_instance():
         bot_instance = WhatsAppBot()
         bot_instance.start()
     return bot_instance
-
-
-if __name__ == "__main__":
-    # Modo standalone: solo ejecuta el bot
-    bot = WhatsAppBot()
-    bot.start()
-    bot.wait_forever()
