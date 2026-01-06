@@ -1,248 +1,247 @@
-"""
-Servidor webhook para recibir notificaciones de Jira
-y enviarlas a WhatsApp
-"""
 from flask import Flask, request, jsonify
 from bot_whatsapp import get_bot_instance
 import os
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
+import qrcode
+import io
+import base64
 
-# Cargar variables de entorno
 load_dotenv()
 
-# Configuración
-DATA_DIR = os.getenv('DATA_DIR', '.')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '')
-WHATSAPP_GROUP_JID = os.getenv('WHATSAPP_GROUP_JID', '')
-PORT = int(os.getenv('PORT', 5000))
+DATA_DIR = os.getenv("DATA_DIR", ".")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+WHATSAPP_GROUP_JID = os.getenv("WHATSAPP_GROUP_JID", "")
+PORT = int(os.getenv("PORT", 5000))
 
-# Asegurar que el directorio de datos existe
-if DATA_DIR != '.' and not os.path.exists(DATA_DIR):
+if DATA_DIR != "." and not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR, exist_ok=True)
 
-# Rutas de archivos persistentes
 JID_FILE = os.path.join(DATA_DIR, "active_group.jid")
 
-# Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Crear aplicación Flask
 app = Flask(__name__)
 
-# Inicializar bot de WhatsApp
 logger.info("🚀 Iniciando bot de WhatsApp...")
 whatsapp_bot = get_bot_instance()
 logger.info("✅ Bot de WhatsApp iniciado")
 
+
 def format_jira_ticket_message(webhook_data):
-    """
-    Formatea los datos del webhook de Jira en un mensaje legible
-    
-    Args:
-        webhook_data: Datos del webhook de Jira
-        
-    Returns:
-        str: Mensaje formateado para WhatsApp
-    """
     try:
-        issue = webhook_data.get('issue', {})
-        fields = issue.get('fields', {})
-        
-        # Extraer información relevante
-        key = issue.get('key', 'N/A')
-        summary = fields.get('summary') or 'Sin título'
-        description = fields.get('description') or 'Sin descripción'
-        
-        reporter_obj = fields.get('reporter') or {}
-        reporter = reporter_obj.get('displayName', 'Desconocido')
-        
-        priority_obj = fields.get('priority') or {}
-        priority = priority_obj.get('name', 'Sin prioridad')
-        
-        issuetype_obj = fields.get('issuetype') or {}
-        issue_type = issuetype_obj.get('name', 'Ticket')
-        
-        # Obtener fecha real de creación del ticket
-        created_str = fields.get('created', '')
+        issue = webhook_data.get("issue", {})
+        fields = issue.get("fields", {})
+
+        key = issue.get("key", "N/A")
+        summary = fields.get("summary") or "Sin título"
+        description = fields.get("description") or "Sin descripción"
+
+        reporter_obj = fields.get("reporter") or {}
+        reporter = reporter_obj.get("displayName", "Desconocido")
+
+        priority_obj = fields.get("priority") or {}
+        priority = priority_obj.get("name", "Sin prioridad")
+
+        issuetype_obj = fields.get("issuetype") or {}
+        issue_type = issuetype_obj.get("name", "Ticket")
+
+        created_str = fields.get("created", "")
         try:
-            # Intentar formatear la fecha de Jira (ej: 2026-01-05T07:26:06.000+0000)
             if created_str:
-                # Simplificación para mostrar fecha legible sin dependencias extra
-                created_dt = created_str.split('.')[0].replace('T', ' ')
+                created_dt = created_str.split(".")[0].replace("T", " ")
             else:
-                created_dt = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        except:
-            created_dt = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Construir URL del ticket
-        jira_url = os.getenv('JIRA_URL', 'https://integratelperu.atlassian.net')
+                created_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, AttributeError, IndexError):
+            created_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        jira_url = os.getenv("JIRA_URL", "https://integratelperu.atlassian.net")
         ticket_url = f"{jira_url}/browse/{key}"
-        
-        # Formatear mensaje
+
         message = f"""🎫 *Nuevo Ticket en Jira*
+        📋 *{issue_type}:* {key}
+        📝 *Título:* {summary}
+        👤 *Reportado por:* {reporter}
+        ⚡ *Prioridad:* {priority}
+        📄 *Descripción:*
+        {description[:200]}{'...' if len(description) > 200 else ''}
+        🔗 *Ver ticket:* {ticket_url}
 
-📋 *{issue_type}:* {key}
-📝 *Título:* {summary}
-👤 *Reportado por:* {reporter}
-⚡ *Prioridad:* {priority}
-
-📄 *Descripción:*
-{description[:200]}{'...' if len(description) > 200 else ''}
-
-🔗 *Ver ticket:* {ticket_url}
-
-⏰ *Creado:* {created_dt}
-"""
+        ⏰ *Creado:* {created_dt}
+        """
         return message
-        
+
     except Exception as e:
         logger.error(f"Error al formatear mensaje: {e}")
         return f"⚠️ Nuevo ticket creado en Jira (error al formatear detalles)\n{str(webhook_data)[:200]}"
 
-@app.route('/health', methods=['GET'])
+
+@app.route("/health", methods=["GET"])
 def health_check():
     """Endpoint de health check"""
-    return jsonify({
-        'status': 'ok',
-        'bot_connected': whatsapp_bot.is_connected,
-        'timestamp': datetime.now().isoformat()
-    })
+    return jsonify(
+        {
+            "status": "ok",
+            "bot_connected": whatsapp_bot.is_connected,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
-@app.route('/webhook/jira', methods=['POST'])
+
+@app.route("/qr", methods=["GET"])
+def get_qr():
+    """Endpoint para mostrar el código QR de WhatsApp con auto-update"""
+    if whatsapp_bot.is_connected:
+        return (
+            """
+        <html>
+            <head><title>Bot Conectado</title><style>body{font-family:sans-serif;text-align:center;padding-top:50px;}</style></head>
+            <body>
+                <h1>✅ Bot ya está conectado a WhatsApp</h1>
+                <p>El bot está listo para procesar notificaciones de Jira.</p>
+            </body>
+        </html>
+        """,
+            200,
+        )
+
+    if not whatsapp_bot.qr_data:
+        return (
+            """
+        <html>
+            <head>
+                <title>Generando QR...</title>
+                <meta http-equiv="refresh" content="5">
+                <style>body{font-family:sans-serif;text-align:center;padding-top:50px;}</style>
+            </head>
+            <body>
+                <h1>⏳ Generando código QR...</h1>
+                <p>Por favor espera un momento, la página se recargará automáticamente cada 5 segundos.</p>
+            </body>
+        </html>
+        """,
+            200,
+        )
+
+    # Generar imagen QR
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(whatsapp_bot.qr_data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    # Guardar en buffer de memoria y convertir a base64
+    img_io = io.BytesIO()
+    img.save(img_io, "PNG")
+    img_io.seek(0)
+    img_base64 = base64.b64encode(img_io.getvalue()).decode()
+
+    return (
+        f"""
+    <html>
+        <head>
+            <title>Vincular WhatsApp</title>
+            <meta http-equiv="refresh" content="15">
+            <style>
+                body {{ font-family: sans-serif; text-align: center; padding: 20px; background-color: #f0f2f5; }}
+                .container {{ background: white; padding: 30px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+                img {{ margin: 20px 0; }}
+                .status {{ color: #65676b; font-size: 0.9em; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Escanea el código QR</h1>
+                <p>Abre WhatsApp en tu teléfono > Dispositivos vinculados > Vincular un dispositivo</p>
+                <img src="data:image/png;base64,{img_base64}" alt="QR WhatsApp" />
+                <p class="status">La página se actualiza automáticamente cada 15 segundos.</p>
+                <p class="status">Última actualización: {datetime.now().strftime('%H:%M:%S')}</p>
+            </div>
+        </body>
+    </html>
+    """,
+        200,
+    )
+
+
+@app.route("/webhook/jira", methods=["POST"])
 def jira_webhook():
-    """
-    Endpoint para recibir webhooks de Jira
-    """
     try:
-        # Obtener datos del webhook
         webhook_data = request.json
-        
+
         logger.info(f"📦 Payload recibido: {webhook_data}")
-        
+
         if not webhook_data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        # Verificar que sea un evento de creación de issue
-        webhook_event = webhook_data.get('webhookEvent', '')
-        
+            return jsonify({"error": "No data provided"}), 400
+
+        webhook_event = webhook_data.get("webhookEvent", "")
+
         logger.info(f"📨 Webhook recibido: {webhook_event}")
-        
-        # Solo procesar eventos de creación de issues
-        if webhook_event == 'jira:issue_created':
-            # Formatear mensaje
+
+        if webhook_event == "jira:issue_created":
             message = format_jira_ticket_message(webhook_data)
-            
-            # Verificar que tengamos el JID del grupo configurado
-            # Prioridad 1: Archivo generado dinámicamente (por comando /group o autojoin)
-            # Prioridad 2: Variable de entorno (fallback estático)
             target_jid = None
-            
+
             try:
                 if os.path.exists(JID_FILE):
                     with open(JID_FILE, "r") as f:
                         file_jid = f.read().strip()
                         if file_jid:
                             target_jid = file_jid
-                            logger.info(f"📍 Usando JID dinámico desde archivo: {target_jid}")
+                            logger.info(
+                                f"📍 Usando JID dinámico desde archivo: {target_jid}"
+                            )
             except Exception as e:
                 logger.error(f"Error leyendo {JID_FILE}: {e}")
-            
-            # Si no hay JID en archivo, usar variable de entorno
+
             if not target_jid:
                 target_jid = WHATSAPP_GROUP_JID
                 if target_jid:
                     logger.info(f"📄 Usando JID estático desde .env: {target_jid}")
 
             if not target_jid:
-                logger.error("❌ No hay destino configurado. Añade el bot a un grupo o configura WHATSAPP_GROUP_JID")
-                return jsonify({
-                    'error': 'No WhatsApp group configured',
-                    'message': 'Add the bot to a group or set WHATSAPP_GROUP_JID in .env'
-                }), 500
-            
-            # Enviar mensaje a WhatsApp
+                logger.error(
+                    "❌ No hay destino configurado. Añade el bot a un grupo o configura WHATSAPP_GROUP_JID"
+                )
+                return jsonify(
+                    {
+                        "error": "No WhatsApp group configured",
+                        "message": "Add the bot to a group or set WHATSAPP_GROUP_JID in .env",
+                    }
+                ), 500
+
             success = whatsapp_bot.send_message(target_jid, message)
-            
+
             if success:
-                logger.info(f"✅ Notificación enviada para ticket: {webhook_data.get('issue', {}).get('key', 'N/A')}")
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Notification sent to WhatsApp'
-                }), 200
+                logger.info(
+                    f"✅ Notificación enviada para ticket: {webhook_data.get('issue', {}).get('key', 'N/A')}"
+                )
+                return jsonify(
+                    {"status": "success", "message": "Notification sent to WhatsApp"}
+                ), 200
             else:
                 logger.error("❌ Error al enviar mensaje a WhatsApp")
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to send WhatsApp message'
-                }), 500
+                return jsonify(
+                    {"status": "error", "message": "Failed to send WhatsApp message"}
+                ), 500
         else:
             # Evento no relevante, pero responder OK
             logger.info(f"ℹ️ Evento ignorado: {webhook_event}")
-            return jsonify({
-                'status': 'ignored',
-                'message': f'Event {webhook_event} not processed'
-            }), 200
-            
+            return jsonify(
+                {"status": "ignored", "message": f"Event {webhook_event} not processed"}
+            ), 200
+
     except Exception as e:
         logger.error(f"❌ Error procesando webhook: {e}", exc_info=True)
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/test/send', methods=['POST'])
-def test_send():
-    """
-    Endpoint de prueba para enviar mensajes manualmente
-    Requiere: {"jid": "123456789@g.us", "message": "Texto del mensaje"}
-    """
-    try:
-        data = request.json
-        # Intentar obtener JID de: request > env > archivo
-        jid = data.get('jid') or WHATSAPP_GROUP_JID
-        
-        if not jid:
-             try:
-                if os.path.exists(JID_FILE):
-                    with open(JID_FILE, "r") as f:
-                        jid = f.read().strip()
-             except:
-                 pass
-        
-        message = data.get('message', '🧪 Mensaje de prueba')
-        
-        if not jid:
-            return jsonify({'error': 'JID not provided and no active group found'}), 400
-        
-        success = whatsapp_bot.send_message(jid, message)
-        
-        if success:
-            return jsonify({
-                'status': 'success',
-                'message': 'Test message sent'
-            }), 200
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to send message'
-            }), 500
-            
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logger.info(f"🌐 Servidor webhook iniciando en puerto {PORT}...")
     logger.info(f"📱 WhatsApp Group JID: {WHATSAPP_GROUP_JID or 'NO CONFIGURADO'}")
-    logger.info(f"🔐 Webhook Secret: {'Configurado' if WEBHOOK_SECRET else 'NO CONFIGURADO (no recomendado)'}")
-    
-    app.run(
-        host='0.0.0.0',
-        port=PORT,
-        debug=False
+    logger.info(
+        f"🔐 Webhook Secret: {'Configurado' if WEBHOOK_SECRET else 'NO CONFIGURADO (no recomendado)'}"
     )
+
+    app.run(host="0.0.0.0", port=PORT, debug=False)

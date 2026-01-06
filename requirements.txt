@@ -1,3 +1,5 @@
 neonize
 flask
 python-dotenv
+qrcode
+Pillow
