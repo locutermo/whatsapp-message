@@ -6,7 +6,7 @@ services:
     container_name: bot_whatsapp
     restart: always
     ports:
-      - "5001:5000"
+      - "5001:5001"
     env_file:
       - .env
     volumes:

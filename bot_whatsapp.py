@@ -21,7 +21,6 @@ class WhatsAppBot:
         self.session_file = session_file or os.path.join(DATA_DIR, "session.db")
         self.is_connected = False
         self.connection_event = threading.Event()
-        self.qr_data = None
 
     def setup_handlers(self):
         @self.client.event(ConnectedEv)
@@ -29,12 +28,6 @@ class WhatsAppBot:
             print("✅ ¡Bot conectado con éxito a WhatsApp!")
             self.is_connected = True
             self.connection_event.set()
-            self.qr_data = None
-
-        @self.client.event(QREv)
-        def on_qr(client: NewClient, qr_string: str):
-            print("🆕 QR Recibido (guardado para /qr)")
-            self.qr_data = qr_string
 
         @self.client.event(MessageEv)
         def on_message(client: NewClient, event: MessageEv):

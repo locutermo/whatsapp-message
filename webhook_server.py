@@ -106,8 +106,9 @@ def get_qr():
         """,
             200,
         )
-
+    print(f"whatsapp_bot.qr_data: {whatsapp_bot.qr_data}")
     if not whatsapp_bot.qr_data:
+        logger.info("🔍 /qr acceded but whatsapp_bot.qr_data is None")
         return (
             """
         <html>
