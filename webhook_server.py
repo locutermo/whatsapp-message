@@ -22,9 +22,24 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-logger.info("🚀 Iniciando bot de WhatsApp...")
-whatsapp_bot = get_bot_instance()
-logger.info("✅ Bot de WhatsApp iniciado")
+logger.info("🚀 Preparando bot de WhatsApp (inicialización diferida)...")
+whatsapp_bot = None
+
+def init_bot():
+    global whatsapp_bot
+    if whatsapp_bot is None:
+        try:
+            logger.info("🚀 Inicializando instancia del bot...")
+            whatsapp_bot = get_bot_instance()
+            logger.info("✅ Bot de WhatsApp iniciado correctamente")
+        except Exception as e:
+            logger.error(f"❌ Error al iniciar bot de WhatsApp: {e}")
+
+# Inicializar bot antes de la primera petición si flask lo permite o de forma manual aquí con cuidado
+try:
+    init_bot()
+except Exception as e:
+    logger.error(f"⚠️ El servidor iniciará, pero el bot falló: {e}")
 
 
 def format_jira_ticket_message(webhook_data):
@@ -78,10 +93,12 @@ def format_jira_ticket_message(webhook_data):
 @app.route("/health", methods=["GET"])
 def health_check():
     """Endpoint de health check"""
+    bot_status = whatsapp_bot.is_connected if whatsapp_bot else False
     return jsonify(
         {
             "status": "ok",
-            "bot_connected": whatsapp_bot.is_connected,
+            "bot_connected": bot_status,
+            "bot_initialized": whatsapp_bot is not None,
             "timestamp": datetime.now().isoformat(),
         }
     )
@@ -89,6 +106,9 @@ def health_check():
 
 @app.route("/webhook/jira", methods=["POST"])
 def jira_webhook():
+    if whatsapp_bot is None:
+        return jsonify({"error": "Bot is not initialized. Please check server logs."}), 503
+
     try:
         webhook_data = request.json
 
