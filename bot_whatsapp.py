@@ -103,22 +103,29 @@ class WhatsAppBot:
                 "🧹 Reset de sesión solicitado (WHATSAPP_RESET_SESSION=true), eliminando sesión..."
             )
             if os.path.exists(self.session_file):
-                os.remove(self.session_file)
+                try:
+                    os.remove(self.session_file)
+                except Exception as e:
+                    logging.error(f"❌ Error al intentar borrar la sesión: {e}")
         elif (
             os.path.exists(self.session_file)
             and os.path.getsize(self.session_file) == 0
         ):
             logging.info("🧹 Archivo de sesión vacío detectado, limpiando...")
-            os.remove(self.session_file)
-
-        self.client = NewClient(self.session_file)
-        self.setup_handlers()
+            try:
+                os.remove(self.session_file)
+            except Exception as e:
+                logging.error(f"❌ Error al intentar borrar la sesión vacía: {e}")
 
         phone_number = os.getenv("WHATSAPP_PHONE")
 
         def run_client():
-            logging.info("⚡ Intentando conectar a WhatsApp...")
+            logging.info("⚡ Inicializando y conectando cliente de WhatsApp en segundo plano...")
             try:
+                # Mover NewClient al thread secundario para no bloquear a Flask
+                self.client = NewClient(self.session_file)
+                self.setup_handlers()
+
                 if not self.client.is_logged_in and phone_number:
                     logging.info(
                         f"📲 Solicitando Pairing Code para el número: {phone_number}"
@@ -127,12 +134,13 @@ class WhatsAppBot:
 
                 self.client.connect()
             except Exception as e:
-                logging.error(f"❌ Error crítico en la conexión: {e}")
+                logging.error(f"❌ Error crítico en la conexión de WhatsApp: {e}")
 
         self.client_thread = threading.Thread(target=run_client, daemon=True)
         self.client_thread.start()
 
         return self.client
+
 
     def send_message(self, jid, message: str):
         """
