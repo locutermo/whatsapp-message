@@ -117,15 +117,14 @@ class WhatsAppBot:
             except Exception as e:
                 logging.error(f"❌ Error al intentar borrar la sesión vacía: {e}")
 
+        self.client = NewClient(self.session_file)
+        self.setup_handlers()
+
         phone_number = os.getenv("WHATSAPP_PHONE")
 
         def run_client():
-            logging.info("⚡ Inicializando y conectando cliente de WhatsApp en segundo plano...")
+            logging.info("⚡ Conectando cliente de WhatsApp en segundo plano...")
             try:
-                # Mover NewClient al thread secundario para no bloquear a Flask
-                self.client = NewClient(self.session_file)
-                self.setup_handlers()
-
                 if not self.client.is_logged_in and phone_number:
                     logging.info(
                         f"📲 Solicitando Pairing Code para el número: {phone_number}"
