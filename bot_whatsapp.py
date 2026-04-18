@@ -125,12 +125,22 @@ class WhatsAppBot:
         def run_client():
             logging.info("⚡ Conectando cliente de WhatsApp en segundo plano...")
             try:
-                if not self.client.is_logged_in and phone_number:
-                    logging.info(
-                        f"📲 Solicitando Pairing Code para el número: {phone_number}"
-                    )
-                    self.client.PairPhone(phone_number, True)
+                def delayed_pair():
+                    import time
+                    # Esperar a que connect() establezca el socket interno (evita 'client is nil')
+                    time.sleep(2)
+                    if not self.client.is_logged_in and phone_number:
+                        logging.info(
+                            f"📲 Solicitando Pairing Code para el número: {phone_number}"
+                        )
+                        try:
+                            self.client.PairPhone(phone_number, True)
+                        except Exception as e:
+                            logging.error(f"❌ Error al solicitar Pairing Code: {e}")
 
+                threading.Thread(target=delayed_pair, daemon=True).start()
+
+                # connect() es bloqueante, debe correr para que se inicie el socket
                 self.client.connect()
             except Exception as e:
                 logging.error(f"❌ Error crítico en la conexión de WhatsApp: {e}")
